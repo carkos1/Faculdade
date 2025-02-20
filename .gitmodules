@@ -1,3 +1,6 @@
 [submodule "BD"]
 	path = BD
 	url = git@github.com:carkos1/BD.git
+[submodule "MULT"]
+	path = MULT
+	url = git@github.com:carkos1/MULT.git
