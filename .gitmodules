@@ -4,3 +4,9 @@
 [submodule "MULT"]
 	path = MULT
 	url = git@github.com:carkos1/MULT.git
+[submodule "EA"]
+	path = EA
+	url = git@github.com:carkos1/EA/
+[submodule "PC"]
+	path = PC
+	url = git@github.com:carkos1/PC/
