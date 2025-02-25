@@ -10,3 +10,6 @@
 [submodule "PC"]
 	path = PC
 	url = git@github.com:carkos1/PC/
+[submodule "SD"]
+	path = SD
+	url = git@github.com:carkos1/SD
