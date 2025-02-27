@@ -13,3 +13,6 @@
 [submodule "SD"]
 	path = SD
 	url = git@github.com:carkos1/SD
+[submodule "FIA"]
+	path = FIA
+	url = git@github.com:carkos1/FIA
