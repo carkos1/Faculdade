@@ -16,3 +16,6 @@
 [submodule "FIA"]
 	path = FIA
 	url = git@github.com:carkos1/FIA
+[submodule "AI"]
+	path = AI
+	url = git@github.com:carkos1/AI.git
