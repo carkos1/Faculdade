@@ -19,3 +19,6 @@
 [submodule "AI"]
 	path = AI
 	url = git@github.com:carkos1/AI.git
+[submodule "IPRP"]
+	path = IPRP
+	url = git@github.com:carkos1/IPRP.git
