@@ -22,3 +22,6 @@
 [submodule "IPRP"]
 	path = IPRP
 	url = git@github.com:carkos1/IPRP.git
+[submodule "POO"]
+	path = POO
+	url = git@github.com:carkos1/POO.git
