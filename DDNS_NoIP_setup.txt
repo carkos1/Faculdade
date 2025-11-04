@@ -1,0 +1,129 @@
+Hosting this project with No‑IP DDNS (stable hostname on changing IP)
+
+This guide explains how to expose this repository on the Internet using a No‑IP dynamic DNS hostname so clients can always connect using the same name, even if your public IP changes.
+
+Project services and what to expose
+- Public entrypoint: gateway.py (gRPC). Default port: 8000, binds on [::]:PORT. This is the service you normally expose.
+- Orchestrator: orchestrator.py. Default: localhost:9003 (internal). Expose only if you need remote components to reach it.
+- Index server: indexServer.py. Default: localhost:8183 (internal; do not expose).
+- Barrels: barrel.py. Binds on [::]:PORT (default 0 → random). Treat as internal behind the orchestrator; don’t expose unless necessary.
+
+Tip: Run the gateway with --advertise-host <your-ddns-hostname> so the orchestrator and clients learn a reachable public address.
+
+
+Step 1 — Create a No‑IP hostname
+1) Sign up at https://www.noip.com/
+2) Create a hostname, e.g. myproject.ddns.net
+3) You will run a small update client (noip2) on your Linux host to keep this hostname pointing to your current public IP.
+
+
+Step 2 — Install and configure the No‑IP update client (Linux)
+Debian/Ubuntu:
+
+  sudo apt update
+  sudo apt install noip2
+  sudo noip2 -C           # enter No‑IP credentials; select your hostname; default 30 min is fine
+  sudo systemctl enable --now noip2
+  noip2 -S                # verify it’s running (should show a process)
+
+Verify DNS points to your public IP (allow a minute for propagation):
+
+  dig +short myproject.ddns.net
+  curl -4 ifconfig.me
+
+These two outputs should match.
+
+If your distro doesn’t ship noip2, use the Dynamic Update Client tarball from No‑IP and follow their installer; the config and usage are essentially the same.
+
+
+Step 3 — Router port forwarding and local firewall
+1) Give your Linux host a fixed LAN IP (DHCP reservation in your router), e.g. 192.168.1.50.
+2) Create port forwards in the router:
+   - External TCP 8000 → 192.168.1.50:8000 (gateway)
+   - Only forward 9003 (orchestrator) if you truly need remote components. Avoid exposing 8183 (index).
+3) Open your Linux firewall (if UFW is enabled):
+
+  sudo ufw allow 8000/tcp
+  # Optional, only if exposing orchestrator:
+  sudo ufw allow 9003/tcp
+  sudo ufw status
+
+4) External check (from a device off your network, e.g., phone on LTE):
+
+  nc -vz myproject.ddns.net 8000
+
+Optional (if grpcurl is installed) to list services:
+
+  grpcurl -plaintext myproject.ddns.net:8000 list
+
+
+Step 4 — Run your services with the right bind/advertise
+- Gateway (public):
+  - Already binds [::]:PORT. Advertise your DDNS name so peers use a reachable address.
+  - Example:
+
+    python gateway.py --port 8000 \
+      --orchestrator 192.168.1.50:9003 \
+      --advertise-host myproject.ddns.net
+
+- Orchestrator (internal by default):
+  - Only if needed externally:
+
+    python orchestrator.py --host 0.0.0.0 --port 9003
+
+- Index server (internal): keep as-is (localhost:8183).
+- Barrels (internal): keep random port or pin with --port only if you need remote barrels. Avoid exposing.
+
+Why --advertise-host matters: gateway.py uses it when registering with the orchestrator so other components learn a public address (your DDNS name) instead of a private LAN IP.
+
+
+Step 5 — TLS (recommended if exposed to the Internet)
+Option A) Use a reverse proxy that handles TLS automatically (simplest)
+- Caddy is excellent; it gets and renews Let’s Encrypt certs automatically.
+- Forward router ports 80 and 443 → your host (run Caddy there), and keep the gateway on localhost:8000.
+- Minimal Caddyfile for gRPC (H2C upstream):
+
+  myproject.ddns.net {
+      reverse_proxy * {
+          to h2c://127.0.0.1:8000
+      }
+  }
+
+Option B) Terminate TLS in Python gRPC
+- Obtain a cert for your DDNS hostname (e.g., with Certbot standalone; temporarily forward 80 during issuance):
+
+  sudo certbot certonly --standalone -d myproject.ddns.net --agree-tos -m you@example.com
+
+- Load the cert/key into your gRPC server and switch to add_secure_port in code. This requires a small code change in gateway.py.
+
+Security tips
+- Expose only what you must (ideally just the gateway).
+- Prefer a TLS-terminating proxy (Caddy/NGINX) for simpler cert management.
+- Keep UFW and router rules minimal.
+
+
+Important: CGNAT/double NAT caveat
+If your ISP uses Carrier‑Grade NAT, router port forwarding won’t make your service reachable from the public Internet, and DDNS alone won’t help. Signs include: router’s WAN IP is private or doesn’t match what “what’s my IP” websites show.
+
+Alternatives that work behind CGNAT:
+- Cloudflare Tunnel (free): expose a local service to the Internet without opening ports.
+- Tailscale + Funnel: stable endpoint and optional HTTPS with minimal setup.
+- ngrok: quick tunnels, great for development.
+- VPS with a static IP: run a reverse proxy there and connect to it from home via reverse SSH tunnel or WireGuard.
+
+
+Quick checklist
+- Create No‑IP hostname and run noip2 as a service.
+- Forward router ports (minimally TCP 8000 → gateway host) and allow them in UFW.
+- Run gateway.py with --advertise-host your-ddns-host.
+- Prefer a TLS proxy (Caddy) and forward 80/443 rather than 8000 directly.
+- If you’re on CGNAT, use a tunnel (Cloudflare Tunnel, Tailscale Funnel, ngrok) or deploy a VPS reverse proxy.
+
+
+Project-specific notes (filenames in this repo)
+- gateway.py: public entrypoint. Use --advertise-host myproject.ddns.net. Default port 8000.
+- orchestrator.py: internal by default (localhost:9003). Use --host 0.0.0.0 only if you must expose it.
+- indexServer.py: localhost:8183; keep internal.
+- barrel.py: internal; default random port; avoid exposing unless necessary.
+
+If you’d like, you can add a Caddyfile and systemd units to automate startup and TLS; or switch gateway.py to native TLS with add_secure_port.
